@@ -1,5 +1,32 @@
 # Criando ambientes customizados usando a biblioteca Gymnasium
 
+## Relatório da APS
+
+O relatório da APS de Coverage Path Planning está disponível em
+[`relatorio_cpp_maskable_ppo.md`](relatorio_cpp_maskable_ppo.md).
+
+Para reproduzir o treinamento e os testes principais:
+
+```bash
+python train_grid_world_cpp.py train 5 3 200 100000 --algo maskable --learning-rate 0.0005 --ent-coef 0.01 --eval-freq 25000
+```
+
+```bash
+python train_grid_world_cpp.py curriculum 5 3 200 300000 --algo maskable --model log/<RUN_5X5>/best_model/best_model.zip --learning-rate 0.0001 --ent-coef 0.01 --eval-freq 25000
+```
+
+```bash
+python train_grid_world_cpp.py test 5 3 --model log/<RUN_5X5_REFINADO>/best_model/best_model.zip --algo maskable --episodes 100 --stochastic
+```
+
+```bash
+python train_grid_world_cpp.py curriculum 10 12 400 500000 --algo maskable --model log/<RUN_5X5_REFINADO>/best_model/best_model.zip --learning-rate 0.00005 --ent-coef 0.01 --eval-freq 50000
+```
+
+```bash
+python train_grid_world_cpp.py test 10 12 400 --model log/<RUN_10X10>/best_model/best_model.zip --algo maskable --episodes 100 --stochastic
+```
+
 O objetivo deste repositório é fornecer alguns exemplos de ambientes customizados criados 
 usando a biblioteca Gymnasium. 
 
