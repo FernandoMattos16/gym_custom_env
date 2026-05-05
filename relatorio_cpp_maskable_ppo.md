@@ -149,9 +149,34 @@ Cada configuração foi avaliada em 100 episódios.
 Os gráficos abaixo resumem a comparação do full coverage rate e a cobertura
 média obtida nos experimentos finais.
 
-![Comparação do full coverage rate](figures/full_coverage_rate.png)
+<p align="center">
+  <img src="./figures/full_coverage_rate.png" alt="Comparação do full coverage rate" width="760">
+</p>
 
-![Cobertura média obtida pelo MaskablePPO](figures/average_coverage.png)
+<p align="center">
+  <img src="./figures/average_coverage.png" alt="Cobertura média obtida pelo MaskablePPO" width="620">
+</p>
+
+As curvas abaixo mostram a evolução do treinamento nos principais runs usados na
+solução final. A recompensa média indica a melhora da política ao longo do
+treino. O tamanho médio dos episódios ajuda a interpretar a eficiência: quando o
+agente aprende a cobrir mais células sem ficar preso por muito tempo, a duração
+média tende a diminuir ou se estabilizar em valores menores.
+
+<p align="center">
+  <img src="./figures/learning_curve_reward.png" alt="Curva de aprendizagem pela recompensa média" width="760">
+</p>
+
+<p align="center">
+  <img src="./figures/learning_curve_episode_length.png" alt="Eficiência durante o treinamento pelo tamanho médio dos episódios" width="760">
+</p>
+
+Por fim, o gráfico de eficiência final compara os passos médios dos testes com o
+full coverage rate obtido em cada configuração.
+
+<p align="center">
+  <img src="./figures/policy_efficiency.png" alt="Eficiência final da política" width="700">
+</p>
 
 O caso `10x10` com `max_steps=400` segue a configuração principal discutida para
 ambientes maiores. O caso com `max_steps=600` foi usado como experimento de
