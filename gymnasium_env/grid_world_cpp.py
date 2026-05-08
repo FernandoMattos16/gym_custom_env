@@ -12,17 +12,16 @@ import pygame
 # discourage revisiting already-visited cells.
 #
 # Reward function (inspired by deep RL approaches to patrolling/coverage problems):
-#   - +1.0 for visiting a new (unvisited) cell
-#   - -0.3 for revisiting an already-visited cell
-#   - -0.1 step penalty to encourage efficiency
-#   - +10.0 bonus for achieving full coverage (all free cells visited)
-#   - -5.0 penalty when max steps reached without full coverage
+#   - +1.5 for visiting a new cell
+#   - -0.08 for revisiting an already-visited cell
+#   - -0.02 step penalty to encourage efficiency
+#   - +25.0 bonus for achieving full coverage
+#   - penalty proportional to missing coverage when max steps is reached
 #
 # The observation space includes:
 #   - Agent's (x, y) location (normalized)
 #   - Coverage ratio (proportion of free cells visited)
-#   - A 3x3 matrix of neighboring cells centered on the agent,
-#     where (1,1) is the agent's position and each cell is:
+#   - A local matrix of neighboring cells centered on the agent and each cell is:
 #       0 = free (not yet visited), 1 = obstacle or wall (including out-of-bounds),
 #       2 = already visited position.
 #     Cells outside the grid boundaries are treated as walls (1).
@@ -34,21 +33,31 @@ class GridWorldCPPEnv(gym.Env):
 
     metadata = {"render_modes": ["human", "rgb_array"], "render_fps": 4}
 
-    def __init__(self, render_mode=None, size: int = 5, obs_quantity: int = 3, max_steps: int = 200):
+    def __init__(
+        self,
+        render_mode=None,
+        size: int = 5,
+        obs_quantity: int = 3,
+        max_steps: int = 200,
+        obs_window_size: int = 5,
+    ):
+        if obs_window_size not in (3, 5):
+            raise ValueError("obs_window_size must be 3 or 5")
         self.size = size
         self.window_size = 512
         self.obs_quantity = obs_quantity
         self.obstacles_locations = []
         self.count_steps = 0
         self.max_steps = max_steps
+        self.obs_window_size = obs_window_size
 
         # Track visited cells
         self.visited = set()
 
         self._agent_location = np.array([-1, -1], dtype=int)
-        self._neighbors = np.zeros((3, 3), dtype=int)  # 3x3 matrix centered on agent
+        self._neighbors = np.zeros((obs_window_size, obs_window_size), dtype=int)
 
-        # Observation: Dict with agent info (x, y, coverage) and 3x3 neighbor matrix
+        # Observation: Dict with agent info (x, y, coverage) and local neighbor matrix.
         self.observation_space = gym.spaces.Dict({
             "agent": gym.spaces.Box(
                 low=np.array([0.0, 0.0, 0.0], dtype=np.float32),
@@ -56,8 +65,8 @@ class GridWorldCPPEnv(gym.Env):
                 dtype=np.float32
             ),
             "neighbors": gym.spaces.Box(
-                low=np.zeros((3, 3), dtype=np.float32),
-                high=np.full((3, 3), 2.0, dtype=np.float32),
+                low=np.zeros((obs_window_size, obs_window_size), dtype=np.float32),
+                high=np.full((obs_window_size, obs_window_size), 2.0, dtype=np.float32),
                 dtype=np.float32
             ),
         })
@@ -105,18 +114,19 @@ class GridWorldCPPEnv(gym.Env):
         }
 
     def set_neighbors(self, obstacles_locations):
-        # Create a 3x3 matrix centered on the agent's location.
-        # Row index i corresponds to agent_y + (i-1), col index j to agent_x + (j-1).
+        # Create a local matrix centered on the agent's location.
         # 0 = free (not yet visited), 1 = obstacle or wall (out-of-bounds), 2 = already visited.
-        matrix = np.zeros((3, 3), dtype=int)
-        for i in range(3):
-            for j in range(3):
-                nx = self._agent_location[0] + (j - 1)
-                ny = self._agent_location[1] + (i - 1)
+        matrix = np.zeros((self.obs_window_size, self.obs_window_size), dtype=int)
+        center = self.obs_window_size // 2
+        obstacles = {tuple(loc) for loc in obstacles_locations}
+        for i in range(self.obs_window_size):
+            for j in range(self.obs_window_size):
+                nx = self._agent_location[0] + (j - center)
+                ny = self._agent_location[1] + (i - center)
                 neighbor = np.array([nx, ny])
                 if not (0 <= nx < self.size and 0 <= ny < self.size):
                     matrix[i][j] = 1
-                elif any(np.array_equal(neighbor, loc) for loc in obstacles_locations):
+                elif tuple(neighbor) in obstacles:
                     matrix[i][j] = 1
                 elif (nx, ny) in self.visited:
                     matrix[i][j] = 2
@@ -173,31 +183,27 @@ class GridWorldCPPEnv(gym.Env):
         is_new_cell = current_pos not in self.visited
         stayed_in_place = np.array_equal(self._agent_location, old_location)
 
-        # Base step penalty
-        reward = -0.1
+        reward = -0.02
 
         if stayed_in_place:
-            # Hitting wall or obstacle
-            reward -= 0.5
+            reward -= 1.0
         elif is_new_cell:
-            # Reward for exploring new cell
-            reward += 1.0
+            reward += 1.5
             self.visited.add(current_pos)
         else:
-            # Penalty for revisiting
-            reward -= 0.3
+            reward -= 0.08
 
         # Check if full coverage achieved
         full_coverage = len(self.visited) >= self.total_free_cells
         terminated = full_coverage
 
         if full_coverage:
-            reward += 10.0
+            reward += 25.0
 
         # Truncation on max steps
         if self.count_steps >= self.max_steps and not terminated:
             truncated = True
-            reward -= 5.0
+            reward -= 10.0 * (1.0 - self.coverage_ratio)
         else:
             truncated = False
 

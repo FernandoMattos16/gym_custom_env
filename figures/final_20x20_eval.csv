@@ -1,0 +1,2 @@
+env,dim,obstacles,max_steps,episodes,full_coverage_count,full_coverage_rate,average_coverage,coverage_std,min_coverage,average_steps,steps_std
+20x20,20,48,20000,100,42,42.0,99.11079545454545,1.3170639607688759,94.0340909090909,15896.34,6176.9652503798325

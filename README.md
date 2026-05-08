@@ -8,23 +8,27 @@ O relatório da APS de Coverage Path Planning está disponível em
 Para reproduzir o treinamento e os testes principais:
 
 ```bash
-python train_grid_world_cpp.py train 5 3 200 100000 --algo maskable --learning-rate 0.0005 --ent-coef 0.01 --eval-freq 25000
+python train_grid_world_cpp.py train 5 3 200 500000 --algo maskable --obs-window-size 5 --learning-rate 0.0005 --ent-coef 0.01 --eval-freq 25000
 ```
 
 ```bash
-python train_grid_world_cpp.py curriculum 5 3 200 300000 --algo maskable --model log/<RUN_5X5>/best_model/best_model.zip --learning-rate 0.0001 --ent-coef 0.01 --eval-freq 25000
+python train_grid_world_cpp.py test 5 3 200 --model data/maskable_cpp_obs5_5x5_best.zip --algo maskable --obs-window-size 5 --episodes 100 --stochastic
 ```
 
 ```bash
-python train_grid_world_cpp.py test 5 3 --model log/<RUN_5X5_REFINADO>/best_model/best_model.zip --algo maskable --episodes 100 --stochastic
+python train_grid_world_cpp.py curriculum 10 12 2500 500000 --algo maskable --obs-window-size 5 --model data/maskable_cpp_obs5_5x5_best.zip --learning-rate 0.00005 --ent-coef 0.01 --eval-freq 50000
 ```
 
 ```bash
-python train_grid_world_cpp.py curriculum 10 12 400 500000 --algo maskable --model log/<RUN_5X5_REFINADO>/best_model/best_model.zip --learning-rate 0.00005 --ent-coef 0.01 --eval-freq 50000
+python train_grid_world_cpp.py test 10 12 400 --model data/maskable_cpp_obs5_10x10_best.zip --algo maskable --obs-window-size 5 --episodes 100 --stochastic
 ```
 
 ```bash
-python train_grid_world_cpp.py test 10 12 400 --model log/<RUN_10X10>/best_model/best_model.zip --algo maskable --episodes 100 --stochastic
+python train_grid_world_cpp.py test 10 12 2000 --model data/maskable_cpp_obs5_10x10_best.zip --algo maskable --obs-window-size 5 --episodes 100 --stochastic
+```
+
+```bash
+python train_grid_world_cpp.py test 20 48 20000 --model data/maskable_cpp_obs5_20x20_best.zip --algo maskable --obs-window-size 5 --episodes 100 --stochastic
 ```
 
 O objetivo deste repositório é fornecer alguns exemplos de ambientes customizados criados 
@@ -148,12 +152,12 @@ A nova função de reward foi projetada para incentivar a **exploração de nova
 
 | Condição | Reward |
 |----------|--------|
-| Visitar uma célula **nova** (não visitada) | +1.0 |
-| **Revisitar** uma célula já visitada | -0.3 |
-| Colidir com parede ou obstáculo (ficar no mesmo lugar) | -0.5 |
-| Penalidade por passo (a cada ação) | -0.1 |
-| **Cobertura completa** (todas as células livres visitadas) | +10.0 (bônus) |
-| Máximo de passos atingido sem cobertura completa | -5.0 |
+| Visitar uma célula **nova** (não visitada) | +1.5 |
+| **Revisitar** uma célula já visitada | -0.08 |
+| Colidir com parede ou obstáculo (ficar no mesmo lugar) | -1.0 |
+| Penalidade por passo (a cada ação) | -0.02 |
+| **Cobertura completa** (todas as células livres visitadas) | +25.0 (bônus) |
+| Máximo de passos atingido sem cobertura completa | penalidade proporcional à cobertura faltante |
 
 ### Espaço de Observação
 
@@ -161,7 +165,7 @@ O espaço de observação para este ambiente é:
 
 * Localização do agente normalizado com relação a dimensão do grid (x/dim, y/dim)
 * Razão de células livres visitadas ou cobertura (células visitadas / total de células)
-* Uma matriz 3x3 representando as células vizinhas ao redor do agente, onde (1,1) é a posição do agente e cada célula é:
+* Uma matriz 5x5 representando as células vizinhas ao redor do agente, onde (2,2) é a posição do agente e cada célula é:
   - 0 = livre (ainda não visitada)
   - 1 = obstáculo ou parede (incluindo limites fora do grid)
   - 2 = posição já visitada

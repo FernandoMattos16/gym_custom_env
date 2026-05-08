@@ -2,10 +2,10 @@
 # PPO/RecurrentPPO training for the Coverage Path Planning environment.
 #
 # Examples:
-#   python train_grid_world_cpp.py train 5 3 200 1000000
-#   python train_grid_world_cpp.py curriculum 10 12 400 500000 --model data/model_5x5.zip
-#   python train_grid_world_cpp.py test 5 3 --model data/model_5x5.zip
-#   python train_grid_world_cpp.py run 10 12 --model data/model_10x10.zip
+#   python train_grid_world_cpp.py train 5 3 200 1000000 --obs-window-size 5
+#   python train_grid_world_cpp.py curriculum 10 12 400 500000 --model data/model_5x5.zip --obs-window-size 5
+#   python train_grid_world_cpp.py test 5 3 --model data/model_5x5.zip --obs-window-size 5
+#   python train_grid_world_cpp.py run 10 12 --model data/model_10x10.zip --obs-window-size 5
 #
 
 import argparse
@@ -59,13 +59,14 @@ def register_env():
         pass
 
 
-def make_env(dim: int, obstacles: int, max_steps: int, render_mode: str):
+def make_env(dim: int, obstacles: int, max_steps: int, render_mode: str, obs_window_size: int):
     return gym.make(
         "gymnasium_env/GridWorldCPP-v0",
         size=dim,
         obs_quantity=obstacles,
         max_steps=max_steps,
         render_mode=render_mode,
+        obs_window_size=obs_window_size,
     )
 
 
@@ -84,9 +85,9 @@ def local_action_mask(env):
     return mask if mask.any() else np.ones(4, dtype=bool)
 
 
-def make_masked_env(dim: int, obstacles: int, max_steps: int, render_mode: str):
+def make_masked_env(dim: int, obstacles: int, max_steps: int, render_mode: str, obs_window_size: int):
     return ActionMasker(
-        make_env(dim, obstacles, max_steps, render_mode),
+        make_env(dim, obstacles, max_steps, render_mode, obs_window_size),
         local_action_mask,
     )
 
@@ -156,9 +157,12 @@ def normalize_model_path(path: str) -> str:
     return f"{path}.zip"
 
 
-def configure_model_logger(model, algo, dim, obstacles, max_steps, learning_rate, ent_coef, suffix):
+def configure_model_logger(model, algo, dim, obstacles, max_steps, obs_window_size, learning_rate, ent_coef, suffix):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    run_name = f"{algo}_cpp_{dim}_{obstacles}_{max_steps}_lr{learning_rate}_ent{ent_coef}_{timestamp}{suffix}"
+    run_name = (
+        f"{algo}_cpp_{dim}_{obstacles}_{max_steps}_obs{obs_window_size}"
+        f"_lr{learning_rate}_ent{ent_coef}_{timestamp}{suffix}"
+    )
     log_dir = Path("log") / run_name
     model_path = Path("data") / f"{run_name}.zip"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -167,9 +171,9 @@ def configure_model_logger(model, algo, dim, obstacles, max_steps, learning_rate
     return model_path, log_dir
 
 
-def build_eval_callback(algo, dim, obstacles, max_steps, log_dir, eval_freq):
+def build_eval_callback(algo, dim, obstacles, max_steps, obs_window_size, log_dir, eval_freq):
     env_factory = make_masked_env if algo == "maskable" else make_env
-    eval_env = env_factory(dim, obstacles, max_steps, "rgb_array")
+    eval_env = env_factory(dim, obstacles, max_steps, "rgb_array", obs_window_size)
     best_model_dir = Path(log_dir) / "best_model"
     callback_class = MaskableEvalCallback if algo == "maskable" else EvalCallback
     return callback_class(
@@ -291,6 +295,7 @@ def parse_args():
     parser.add_argument("--n-epochs", type=int, default=6)
     parser.add_argument("--n-envs", type=int, default=8)
     parser.add_argument("--eval-freq", type=int, default=50_000, help="Evaluation interval in timesteps.")
+    parser.add_argument("--obs-window-size", type=int, choices=[3, 5], default=5)
     return parser.parse_args()
 
 
@@ -306,10 +311,10 @@ def main():
 
     if args.mode == "train":
         print(f"--- Starting CPP Training with {algo} ---")
-        check_env(make_env(args.dim, args.obstacles, max_steps, "rgb_array"))
+        check_env(make_env(args.dim, args.obstacles, max_steps, "rgb_array", args.obs_window_size))
         env_factory = make_masked_env if algo == "maskable" else make_env
         env = make_vec_env(
-            lambda: env_factory(args.dim, args.obstacles, max_steps, "rgb_array"),
+            lambda: env_factory(args.dim, args.obstacles, max_steps, "rgb_array", args.obs_window_size),
             n_envs=args.n_envs,
         )
 
@@ -339,6 +344,7 @@ def main():
             args.dim,
             args.obstacles,
             max_steps,
+            args.obs_window_size,
             args.learning_rate,
             args.ent_coef,
             "",
@@ -346,7 +352,7 @@ def main():
 
         print(f"Starting learning with {args.total_timesteps} timesteps...")
         eval_freq = max(args.eval_freq // args.n_envs, 1)
-        callback = build_eval_callback(algo, args.dim, args.obstacles, max_steps, log_dir, eval_freq)
+        callback = build_eval_callback(algo, args.dim, args.obstacles, max_steps, args.obs_window_size, log_dir, eval_freq)
         model.learn(total_timesteps=args.total_timesteps, callback=callback)
         model.save(model_path)
         print(f"Model trained and saved to {model_path}")
@@ -360,7 +366,7 @@ def main():
         print("--- Starting CPP Curriculum Learning Training ---")
         env_factory = make_masked_env if algo == "maskable" else make_env
         env = make_vec_env(
-            lambda: env_factory(args.dim, args.obstacles, max_steps, "rgb_array"),
+            lambda: env_factory(args.dim, args.obstacles, max_steps, "rgb_array", args.obs_window_size),
             n_envs=args.n_envs,
         )
         model = load_model(args.model, env=env, algo=algo)
@@ -371,6 +377,7 @@ def main():
             args.dim,
             args.obstacles,
             max_steps,
+            args.obs_window_size,
             args.learning_rate,
             args.ent_coef,
             "_curriculum",
@@ -378,7 +385,7 @@ def main():
 
         print(f"Continuing learning with {args.total_timesteps} timesteps...")
         eval_freq = max(args.eval_freq // args.n_envs, 1)
-        callback = build_eval_callback(algo, args.dim, args.obstacles, max_steps, log_dir, eval_freq)
+        callback = build_eval_callback(algo, args.dim, args.obstacles, max_steps, args.obs_window_size, log_dir, eval_freq)
         model.learn(
             total_timesteps=args.total_timesteps,
             reset_num_timesteps=False,
@@ -399,6 +406,7 @@ def main():
             args.obstacles,
             max_steps,
             "human" if args.mode == "run" else "rgb_array",
+            args.obs_window_size,
         )
         model = load_model(args.model, algo=algo)
         evaluate(
